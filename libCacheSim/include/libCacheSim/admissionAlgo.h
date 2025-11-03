@@ -31,6 +31,7 @@ admissioner_t *create_prob_admissioner(const char *init_params);
 admissioner_t *create_size_admissioner(const char *init_params);
 admissioner_t *create_size_probabilistic_admissioner(const char *init_params);
 admissioner_t *create_adaptsize_admissioner(const char *init_params);
+admissioner_t *create_futureaccess_admissioner(const char *init_params);
 
 static inline admissioner_t *create_admissioner(const char *admission_algo,
                                                 const char *admission_params) {
@@ -48,6 +49,8 @@ static inline admissioner_t *create_admissioner(const char *admission_algo,
     admissioner = create_size_probabilistic_admissioner(admission_params);
   } else if (strcasecmp(admission_algo, "adaptsize") == 0) {
     admissioner = create_adaptsize_admissioner(admission_params);
+  } else if (strcasecmp(admission_algo, "futureaccess") == 0) {
+    admissioner = create_futureaccess_admissioner(admission_params);
   } else {
     ERROR("admission algo %s not supported\n", admission_algo);
   }
