@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
       .hashpower = 24,
       .consider_obj_metadata = false,
   };
-  cache_t *flashcache = LRU_init(flashcache_cc_params, NULL);
+  cache_t *flashcache = MAGIC_init(flashcache_cc_params, NULL);
   flashcache->admissioner =
       create_admissioner(argv[4], argc > 5 ? argv[5] : NULL);
 
