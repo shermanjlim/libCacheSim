@@ -8,8 +8,8 @@
 
 #define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
-#define NUMACCESS_THRESHOLD 1
-#define PIGGYBACK_THRESHOLD 6 * 60 * 60  // 6 hours
+#define NUMACCESS_THRESHOLD 2
+#define PIGGYBACK_THRESHOLD 12 * 60 * 60  // 6 hours
 
 namespace eviction {
 class MAGIC {
@@ -74,15 +74,20 @@ class MAGIC {
   }
 
   bool can_insert(const request_t *req) {
-    ++obj_freq[req->obj_id];
-
     if (req->features[FUTUREACCESS_FEATURE_IDX] >= NUMACCESS_THRESHOLD) {
       next_insert_futurebased = true;
       return true;
     }
 
     next_insert_futurebased = false;
-    return obj_freq[req->obj_id] > 1;
+
+    ++obj_freq[req->obj_id];
+
+    int old_time = obj_access_times.count(req->obj_id)
+                       ? obj_access_times[req->obj_id]
+                       : req->clock_time;
+    obj_access_times[req->obj_id] = req->clock_time;
+    return (req->clock_time - old_time) > 10;
   }
 
   void print_stats() {
@@ -107,6 +112,7 @@ class MAGIC {
 
   std::unordered_map<obj_id_t, int64_t> evicted_objs{};
 
+  std::unordered_map<obj_id_t, int64_t> obj_access_times{};
   std::unordered_map<obj_id_t, size_t> obj_freq{};
 
   size_t num_req{0};
