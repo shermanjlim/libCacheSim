@@ -8,7 +8,7 @@
 
 #define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
-#define NUMACCESS_THRESHOLD 5
+#define NUMACCESS_THRESHOLD 1
 #define PIGGYBACK_THRESHOLD 6 * 60 * 60  // 6 hours
 
 namespace eviction {
