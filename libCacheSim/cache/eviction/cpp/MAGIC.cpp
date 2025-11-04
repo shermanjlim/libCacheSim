@@ -17,23 +17,40 @@ class MAGIC {
   MAGIC() = default;
 
   void insert_obj(cache_obj_t *obj) {
-    lru_list.push_front(obj);
-    lru_map[obj] = lru_list.begin();
+    if (next_insert_futurebased) {
+      lru_list_future.push_front(obj);
+      lru_map_future[obj] = lru_list_future.begin();
+    } else {
+      lru_list.push_front(obj);
+      lru_map[obj] = lru_list.begin();
+    }
   }
 
   void remove_obj(cache_obj_t *obj) {
-    auto itr = lru_map[obj];
-    lru_list.erase(itr);
-    lru_map.erase(obj);
+    if (lru_map_future.count(obj) > 0) {
+      auto itr = lru_map_future[obj];
+      lru_list_future.erase(itr);
+      lru_map_future.erase(obj);
+    } else {
+      auto itr = lru_map[obj];
+      lru_list.erase(itr);
+      lru_map.erase(obj);
+    }
   }
 
   void move_obj_to_head(cache_obj_t *obj) {
+    next_insert_futurebased = lru_map_future.count(obj) > 0;
     remove_obj(obj);
     insert_obj(obj);
   }
 
   cache_obj_t *evict_obj(const request_t *req) {
-    cache_obj_t *obj = lru_list.back();
+    cache_obj_t *obj;
+    if (lru_list_future.size() > (lru_list.size() / 10)) {
+      obj = lru_list_future.back();
+    } else {
+      obj = lru_list.back();
+    }
     remove_obj(obj);
 
     // track evicted objects and the time they were evicted
@@ -60,9 +77,11 @@ class MAGIC {
     ++obj_freq[req->obj_id];
 
     if (req->features[FUTUREACCESS_FEATURE_IDX] >= NUMACCESS_THRESHOLD) {
+      next_insert_futurebased = true;
       return true;
     }
 
+    next_insert_futurebased = false;
     return obj_freq[req->obj_id] > 1;
   }
 
@@ -71,12 +90,20 @@ class MAGIC {
     std::cout << "Number of maintenance requests: " << num_maintenance
               << std::endl;
     std::cout << "Number of piggyback requests: " << num_piggyback << std::endl;
+
+    std::cout << "LRU list size: " << lru_list.size() << std::endl;
+    std::cout << "LRU list future size: " << lru_list_future.size()
+              << std::endl;
   }
 
  private:
   std::list<cache_obj_t *> lru_list{};
   std::unordered_map<cache_obj_t *, std::list<cache_obj_t *>::iterator>
       lru_map{};
+
+  std::list<cache_obj_t *> lru_list_future{};
+  std::unordered_map<cache_obj_t *, std::list<cache_obj_t *>::iterator>
+      lru_map_future{};
 
   std::unordered_map<obj_id_t, int64_t> evicted_objs{};
 
@@ -85,6 +112,8 @@ class MAGIC {
   size_t num_req{0};
   size_t num_maintenance{0};
   size_t num_piggyback{0};
+
+  bool next_insert_futurebased{false};
 };
 }  // namespace eviction
 
