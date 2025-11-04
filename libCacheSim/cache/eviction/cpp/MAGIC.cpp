@@ -9,7 +9,7 @@
 #define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
 #define NUMACCESS_THRESHOLD 2
-#define PIGGYBACK_THRESHOLD 12 * 60 * 60  // 6 hours
+#define PIGGYBACK_THRESHOLD 6 * 60 * 60  // 6 hours
 
 namespace eviction {
 class MAGIC {
@@ -75,7 +75,7 @@ class MAGIC {
 
   bool can_insert(const request_t *req) {
     if (req->features[FUTUREACCESS_FEATURE_IDX] >= NUMACCESS_THRESHOLD) {
-      next_insert_futurebased = true;
+      next_insert_futurebased = false;
       return true;
     }
 
