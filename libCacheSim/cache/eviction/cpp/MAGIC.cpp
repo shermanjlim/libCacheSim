@@ -1,9 +1,13 @@
+#include <iostream>
 #include <list>
 #include <unordered_map>
 
 #include "dataStructure/hashtable/hashtable.h"
 #include "libCacheSim/cache.h"
 #include "libCacheSim/cacheObj.h"
+
+#define ISM_FEATURE_IDX 1
+#define PIGGYBACK_THRESHOLD 6 * 60 * 60  // 6 hours
 
 namespace eviction {
 class MAGIC {
@@ -26,16 +30,47 @@ class MAGIC {
     insert_obj(obj);
   }
 
-  cache_obj_t *evict_obj() {
+  cache_obj_t *evict_obj(const request_t *req) {
     cache_obj_t *obj = lru_list.back();
     remove_obj(obj);
+
+    // track evicted objects and the time they were evicted
+    evicted_objs[obj->obj_id] = req->clock_time;
+
     return obj;
+  }
+
+  bool can_piggyback(const request_t *req) {
+    num_req++;
+    if ((req->features[ISM_FEATURE_IDX] == 1)) {
+      num_maintenance++;
+      if ((evicted_objs.count(req->obj_id) > 0) &&
+          ((req->clock_time - evicted_objs[req->obj_id]) <
+           PIGGYBACK_THRESHOLD)) {
+        num_piggyback++;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void print_stats() {
+    std::cout << "Number of requests: " << num_req << std::endl;
+    std::cout << "Number of maintenance requests: " << num_maintenance
+              << std::endl;
+    std::cout << "Number of piggyback requests: " << num_piggyback << std::endl;
   }
 
  private:
   std::list<cache_obj_t *> lru_list{};
   std::unordered_map<cache_obj_t *, std::list<cache_obj_t *>::iterator>
       lru_map{};
+
+  std::unordered_map<obj_id_t, int64_t> evicted_objs{};
+
+  size_t num_req{0};
+  size_t num_maintenance{0};
+  size_t num_piggyback{0};
 };
 }  // namespace eviction
 
@@ -98,6 +133,7 @@ cache_t *MAGIC_init(const common_cache_params_t ccache_params,
  */
 static void MAGIC_free(cache_t *cache) {
   auto *magic = static_cast<eviction::MAGIC *>(cache->eviction_params);
+  magic->print_stats();
   delete magic;
   cache_struct_free(cache);
 }
@@ -122,7 +158,50 @@ static void MAGIC_free(cache_t *cache) {
  * @return true if cache hit, false if cache miss
  */
 static bool MAGIC_get(cache_t *cache, const request_t *req) {
-  return cache_get_base(cache, req);
+  cache->n_req += 1;
+
+  // insert our MAGIC logic here.
+  // If the request is labeled maintenance, we pretend that it can be re-ordered
+  // earlier in time and would have piggybacked on the blocks that have entered
+  // the flash cache. These requests will not have any effect on the cache
+  // state. If we can't do the piggyback, proceed as usual.
+  auto *magic = static_cast<eviction::MAGIC *>(cache->eviction_params);
+  if (magic->can_piggyback(req)) {
+    return true;
+  }
+
+  // --------- copied-pasted from cache.c ---------
+  VERBOSE("******* %s req %ld, obj %ld, obj_size %ld, cache size %ld/%ld\n",
+          cache->cache_name, cache->n_req, req->obj_id, req->obj_size,
+          cache->get_occupied_byte(cache), cache->cache_size);
+
+  cache_obj_t *obj = cache->find(cache, req, true);
+  bool hit = (obj != NULL);
+
+  if (cache->admissioner && cache->admissioner->update) {
+    cache->admissioner->update(cache->admissioner, req, cache->cache_size);
+  }
+
+  if (hit) {
+    VERBOSE("req %ld, obj %ld --- cache hit\n", cache->n_req, req->obj_id);
+  } else if (!cache->can_insert(cache, req)) {
+    VERBOSE("req %ld, obj %ld --- cache miss cannot insert\n", cache->n_req,
+            req->obj_id);
+  } else {
+    while (cache->get_occupied_byte(cache) + req->obj_size +
+               cache->obj_md_size >
+           cache->cache_size) {
+      cache->evict(cache, req);
+    }
+    cache->insert(cache, req);
+  }
+
+  if (cache->prefetcher && cache->prefetcher->prefetch) {
+    cache->prefetcher->prefetch(cache, req);
+  }
+
+  return hit;
+  // --------- copied-pasted from cache.c ---------
 }
 
 // ***********************************************************************
@@ -180,7 +259,7 @@ static cache_obj_t *MAGIC_insert(cache_t *cache, const request_t *req) {
 static void MAGIC_evict(cache_t *cache, const request_t *req) {
   auto *magic = static_cast<eviction::MAGIC *>(cache->eviction_params);
 
-  cache_obj_t *obj_to_evict = magic->evict_obj();
+  cache_obj_t *obj_to_evict = magic->evict_obj(req);
   cache_evict_base(cache, obj_to_evict, true);
 }
 
