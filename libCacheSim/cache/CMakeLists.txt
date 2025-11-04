@@ -78,6 +78,7 @@ set(eviction_sources_cpp
         eviction/cpp/GDSF.cpp
         eviction/LHD/lhd.cpp
         eviction/LHD/LHD_Interface.cpp
+        eviction/cpp/MAGIC.cpp
         )
 
 # LRB
