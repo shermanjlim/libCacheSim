@@ -34,8 +34,6 @@ int main(int argc, char **argv) {
       .consider_obj_metadata = false,
   };
   cache_t *flashcache = MAGIC_init(flashcache_cc_params, NULL);
-  flashcache->admissioner =
-      create_admissioner(argv[4], argc > 5 ? argv[5] : NULL);
 
   int64_t n_miss = 0, n_req = 0;
   while (read_one_req(reader, req) == 0) {

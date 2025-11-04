@@ -6,7 +6,9 @@
 #include "libCacheSim/cache.h"
 #include "libCacheSim/cacheObj.h"
 
+#define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
+#define NUMACCESS_THRESHOLD 5
 #define PIGGYBACK_THRESHOLD 6 * 60 * 60  // 6 hours
 
 namespace eviction {
@@ -54,6 +56,16 @@ class MAGIC {
     return false;
   }
 
+  bool can_insert(const request_t *req) {
+    ++obj_freq[req->obj_id];
+
+    if (req->features[FUTUREACCESS_FEATURE_IDX] >= NUMACCESS_THRESHOLD) {
+      return true;
+    }
+
+    return obj_freq[req->obj_id] > 1;
+  }
+
   void print_stats() {
     std::cout << "Number of requests: " << num_req << std::endl;
     std::cout << "Number of maintenance requests: " << num_maintenance
@@ -67,6 +79,8 @@ class MAGIC {
       lru_map{};
 
   std::unordered_map<obj_id_t, int64_t> evicted_objs{};
+
+  std::unordered_map<obj_id_t, size_t> obj_freq{};
 
   size_t num_req{0};
   size_t num_maintenance{0};
@@ -184,7 +198,7 @@ static bool MAGIC_get(cache_t *cache, const request_t *req) {
 
   if (hit) {
     VERBOSE("req %ld, obj %ld --- cache hit\n", cache->n_req, req->obj_id);
-  } else if (!cache->can_insert(cache, req)) {
+  } else if (!magic->can_insert(req)) {  // WE REPLACED THIS WITH MAGIC
     VERBOSE("req %ld, obj %ld --- cache miss cannot insert\n", cache->n_req,
             req->obj_id);
   } else {
