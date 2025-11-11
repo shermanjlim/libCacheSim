@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
       .hashpower = 24,
       .consider_obj_metadata = false,
   };
-  cache_t *cache = MAGIC_init(cache_cc_params, NULL);
+  cache_t *cache = HYBRID_init(cache_cc_params, NULL);
 
   int64_t n_miss = 0, n_req = 0;
   while (read_one_req(reader, req) == 0) {

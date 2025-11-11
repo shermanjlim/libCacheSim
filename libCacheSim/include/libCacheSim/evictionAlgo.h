@@ -98,6 +98,9 @@ cache_t *LFUCpp_init(const common_cache_params_t ccache_params,
 cache_t *MAGIC_init(const common_cache_params_t ccache_params,
                     const char *cache_specific_params);
 
+cache_t *HYBRID_init(const common_cache_params_t ccache_params,
+                     const char *cache_specific_params);
+
 cache_t *LFUDA_init(const common_cache_params_t ccache_params,
                     const char *cache_specific_params);
 

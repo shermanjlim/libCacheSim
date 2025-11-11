@@ -79,6 +79,7 @@ set(eviction_sources_cpp
         eviction/LHD/lhd.cpp
         eviction/LHD/LHD_Interface.cpp
         eviction/cpp/MAGIC.cpp
+        eviction/cpp/HYBRID.cpp
         )
 
 # LRB
