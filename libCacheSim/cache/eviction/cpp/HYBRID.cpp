@@ -1,8 +1,11 @@
+#include <algorithm>
 #include <iostream>
 #include <list>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "dataStructure/hashtable/hashtable.h"
 #include "libCacheSim/cache.h"
@@ -63,13 +66,24 @@ class HYBRID {
   cache_obj_t *evict_obj(const request_t *req) {
     cache_obj_t *obj = lru_list.back();
     remove_obj(obj);
+
+    // track evicted objects and the time they were evicted
+    eviction_ages.push_back(req->clock_time - inserted_objs[obj->obj_id]);
+
     return obj;
   }
 
   void print_stats() {
-    std::cout << "HYBRID LRU cache statistics:" << std::endl;
-    std::cout << "  Current size: " << lru_list.size() << " objects"
+    std::cout << "Average eviction age: "
+              << std::accumulate(eviction_ages.begin(), eviction_ages.end(),
+                                 0.0) /
+                     eviction_ages.size()
               << std::endl;
+    std::cout << "Number of m: " << num_m << std::endl;
+    std::cout << "Number of m no prior: " << num_m_no_prior << std::endl;
+    std::cout << "Number of m exceed threshold: " << num_m_exceed_threshold
+              << std::endl;
+    std::cout << "Number of m piggyback: " << num_m_piggyback << std::endl;
   }
 
   bool maybe_piggyback(const request_t *req) {
@@ -77,13 +91,17 @@ class HYBRID {
       return false;
     }
 
+    ++num_m;
     if (inserted_objs.count(req->obj_id) == 0) {
+      ++num_m_no_prior;
       return false;
     }
     if ((req->clock_time - inserted_objs[req->obj_id]) >
         (threshold_h * 60 * 60)) {
+      ++num_m_exceed_threshold;
       return false;
     }
+    ++num_m_piggyback;
     return true;
   }
 
@@ -96,6 +114,12 @@ class HYBRID {
 
   // track time of inserted objects
   std::unordered_map<obj_id_t, int64_t> inserted_objs{};
+  std::vector<int64_t> eviction_ages{};
+
+  int64_t num_m{0};
+  int64_t num_m_no_prior{0};
+  int64_t num_m_exceed_threshold{0};
+  int64_t num_m_piggyback{0};
 };
 }  // namespace eviction
 
