@@ -6,9 +6,13 @@
 
 #include <string>
 
+#define ISM_FEATURE_IDX 1
+
 cache_t *dramcache;
 cache_t *flashcache;
 request_t *evict_req = new_request();
+
+bool is_m(request_t *req) { return req->features[ISM_FEATURE_IDX] == 1; }
 
 void dram_evict_hook(cache_obj_t *obj_to_evict) {
   evict_req->obj_id = obj_to_evict->obj_id;
@@ -87,17 +91,33 @@ int main(int argc, char **argv) {
   };
   flashcache = HYBRID_init(flashcache_cc_params, NULL);
 
-  int64_t n_miss = 0, n_req = 0;
+  int64_t n_req = 0, n_dram_hit = 0, n_flash_hit = 0, n_m = 0, n_m_dram_hit = 0,
+          n_m_flash_hit = 0;
   while (read_one_req(reader, req) == 0) {
-    if (!dram_get(dramcache, req)) {
-      if (!flashcache->get(flashcache, req)) {
-        n_miss++;
+    ++n_req;
+    if (is_m(req)) {
+      ++n_m;
+    }
+    if (dram_get(dramcache, req)) {
+      ++n_dram_hit;
+      if (is_m(req)) {
+        ++n_m_dram_hit;
+      }
+    } else if (flashcache->get(flashcache, req)) {
+      ++n_flash_hit;
+      if (is_m(req)) {
+        ++n_m_flash_hit;
       }
     }
-    n_req++;
   }
 
-  printf("miss ratio: %lf\n", (double)n_miss / n_req);
+  printf("number of requests: %ld\n", n_req);
+  printf("dram hit ratio: %lf\n", (double)n_dram_hit / n_req);
+  printf("flash hit ratio: %lf\n", (double)n_flash_hit / n_req);
+  printf("hit ratio: %lf\n", (double)(n_dram_hit + n_flash_hit) / n_req);
+  printf("number m: %ld\n", n_m);
+  printf("m dram hit ratio: %lf\n", (double)n_m_dram_hit / n_m);
+  printf("m flash hit ratio: %lf\n", (double)n_m_flash_hit / n_m);
 
   free_request(req);
   dramcache->cache_free(dramcache);
