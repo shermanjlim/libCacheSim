@@ -5,12 +5,16 @@
 #include <libCacheSim.h>
 
 #include <string>
+#include <unordered_map>
 
+#define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
 
 cache_t *dramcache;
 cache_t *flashcache;
 request_t *evict_req = new_request();
+
+std::unordered_map<obj_id_t, int64_t> objs_futureaccess{};
 
 bool is_m(request_t *req) { return req->features[ISM_FEATURE_IDX] == 1; }
 
@@ -18,6 +22,8 @@ void dram_evict_hook(cache_obj_t *obj_to_evict, int64_t clock_time) {
   evict_req->obj_id = obj_to_evict->obj_id;
   evict_req->obj_size = obj_to_evict->obj_size;
   evict_req->clock_time = clock_time;
+  evict_req->features[FUTUREACCESS_FEATURE_IDX] =
+      objs_futureaccess[obj_to_evict->obj_id];
 
   cache_obj_t *obj = flashcache->find(flashcache, evict_req, false);
   bool hit = (obj != NULL);
@@ -37,6 +43,9 @@ void dram_evict_hook(cache_obj_t *obj_to_evict, int64_t clock_time) {
 // --------- copied-pasted from cache.c ---------
 bool dram_get(cache_t *cache, const request_t *req) {
   cache->n_req += 1;
+
+  // track num futureaccess of each object
+  objs_futureaccess[req->obj_id] = req->features[FUTUREACCESS_FEATURE_IDX];
 
   cache_obj_t *obj = cache->find(cache, req, true);
   bool hit = (obj != NULL);

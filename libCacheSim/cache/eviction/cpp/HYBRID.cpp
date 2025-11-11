@@ -11,6 +11,7 @@
 #include "libCacheSim/cache.h"
 #include "libCacheSim/cacheObj.h"
 
+#define FUTUREACCESS_FEATURE_IDX 0
 #define ISM_FEATURE_IDX 1
 
 bool is_m(const request_t *req) { return req->features[ISM_FEATURE_IDX] == 1; }
@@ -105,6 +106,15 @@ class HYBRID {
     return true;
   }
 
+  bool can_insert(const request_t *req) {
+    ++obj_freq[req->obj_id];
+    if (req->features[FUTUREACCESS_FEATURE_IDX] >= 2) {
+      return true;
+    }
+
+    return obj_freq[req->obj_id] > 1;
+  }
+
  private:
   std::list<cache_obj_t *> lru_list{};
   std::unordered_map<cache_obj_t *, std::list<cache_obj_t *>::iterator>
@@ -120,6 +130,9 @@ class HYBRID {
   int64_t num_m_no_prior{0};
   int64_t num_m_exceed_threshold{0};
   int64_t num_m_piggyback{0};
+
+  // data structures for admission policies
+  std::unordered_map<obj_id_t, size_t> obj_freq{};
 };
 }  // namespace eviction
 
@@ -264,7 +277,8 @@ static bool HYBRID_can_insert(cache_t *cache, const request_t *req) {
     return false;
   }
 
-  return true;
+  auto *hybrid = static_cast<eviction::HYBRID *>(cache->eviction_params);
+  return hybrid->can_insert(req);
 }
 
 /**
