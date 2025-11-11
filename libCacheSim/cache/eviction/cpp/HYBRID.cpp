@@ -1,19 +1,53 @@
 #include <iostream>
 #include <list>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 
 #include "dataStructure/hashtable/hashtable.h"
 #include "libCacheSim/cache.h"
 #include "libCacheSim/cacheObj.h"
 
+#define ISM_FEATURE_IDX 1
+
+bool is_m(const request_t *req) { return req->features[ISM_FEATURE_IDX] == 1; }
+
 namespace eviction {
 class HYBRID {
  public:
-  HYBRID() = default;
+  HYBRID(const char *cache_specific_params) {
+    if (cache_specific_params == nullptr) {
+      return;
+    }
+
+    // Parse comma-separated key=value pairs
+    std::stringstream ss(std::string{cache_specific_params});
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+      size_t pos = token.find('=');
+      if (pos != std::string::npos) {
+        std::string key = token.substr(0, pos);
+        std::string value = token.substr(pos + 1);
+        if (key == "piggy") {
+          do_piggyback = value == "1";
+        } else if (key == "threshold_h") {
+          threshold_h = std::stoi(value);
+        }
+      }
+    }
+
+    std::cout << "do_piggyback: " << do_piggyback << std::endl;
+    std::cout << "threshold_h: " << threshold_h << std::endl;
+  }
 
   void insert_obj(cache_obj_t *obj) {
     lru_list.push_front(obj);
     lru_map[obj] = lru_list.begin();
+  }
+
+  void insert_obj(cache_obj_t *obj, const request_t *req) {
+    insert_obj(obj);
+    inserted_objs[obj->obj_id] = req->clock_time;
   }
 
   void remove_obj(cache_obj_t *obj) {
@@ -38,10 +72,30 @@ class HYBRID {
               << std::endl;
   }
 
+  bool maybe_piggyback(const request_t *req) {
+    if (!do_piggyback || !is_m(req)) {
+      return false;
+    }
+
+    if (inserted_objs.count(req->obj_id) == 0) {
+      return false;
+    }
+    if ((req->clock_time - inserted_objs[req->obj_id]) >
+        (threshold_h * 60 * 60)) {
+      return false;
+    }
+    return true;
+  }
+
  private:
   std::list<cache_obj_t *> lru_list{};
   std::unordered_map<cache_obj_t *, std::list<cache_obj_t *>::iterator>
       lru_map{};
+  bool do_piggyback{false};
+  int threshold_h{6};
+
+  // track time of inserted objects
+  std::unordered_map<obj_id_t, int64_t> inserted_objs{};
 };
 }  // namespace eviction
 
@@ -82,7 +136,7 @@ cache_t *HYBRID_init(const common_cache_params_t ccache_params,
                      const char *cache_specific_params) {
   cache_t *cache =
       cache_struct_init("HYBRID", ccache_params, cache_specific_params);
-  auto *hybrid = new eviction::HYBRID();
+  auto *hybrid = new eviction::HYBRID(cache_specific_params);
   cache->eviction_params = hybrid;
 
   cache->cache_init = HYBRID_init;
@@ -136,6 +190,11 @@ static bool HYBRID_get(cache_t *cache, const request_t *req) {
   VERBOSE("******* %s req %ld, obj %ld, obj_size %ld, cache size %ld/%ld\n",
           cache->cache_name, cache->n_req, req->obj_id, req->obj_size,
           cache->get_occupied_byte(cache), cache->cache_size);
+
+  auto *hybrid = static_cast<eviction::HYBRID *>(cache->eviction_params);
+  if (hybrid->maybe_piggyback(req)) {
+    return true;
+  }
 
   cache_obj_t *obj = cache->find(cache, req, true);
   bool hit = (obj != NULL);
@@ -199,7 +258,7 @@ static cache_obj_t *HYBRID_insert(cache_t *cache, const request_t *req) {
   auto *hybrid = static_cast<eviction::HYBRID *>(cache->eviction_params);
 
   cache_obj_t *obj = cache_insert_base(cache, req);
-  hybrid->insert_obj(obj);
+  hybrid->insert_obj(obj, req);
   return obj;
 }
 

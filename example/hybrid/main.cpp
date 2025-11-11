@@ -14,9 +14,10 @@ request_t *evict_req = new_request();
 
 bool is_m(request_t *req) { return req->features[ISM_FEATURE_IDX] == 1; }
 
-void dram_evict_hook(cache_obj_t *obj_to_evict) {
+void dram_evict_hook(cache_obj_t *obj_to_evict, int64_t clock_time) {
   evict_req->obj_id = obj_to_evict->obj_id;
   evict_req->obj_size = obj_to_evict->obj_size;
+  evict_req->clock_time = clock_time;
 
   cache_obj_t *obj = flashcache->find(flashcache, evict_req, false);
   bool hit = (obj != NULL);
@@ -52,7 +53,7 @@ bool dram_get(cache_t *cache, const request_t *req) {
            cache->cache_size) {
       // inserted by us: add a hook to know when DRAM is evicting
       cache_obj_t *obj_to_evict = cache->to_evict(cache, req);
-      dram_evict_hook(obj_to_evict);
+      dram_evict_hook(obj_to_evict, req->clock_time);
       // inserted by us: add a hook to know when DRAM is evicting
       cache->evict(cache, req);
     }
@@ -89,7 +90,7 @@ int main(int argc, char **argv) {
       .hashpower = 24,
       .consider_obj_metadata = false,
   };
-  flashcache = HYBRID_init(flashcache_cc_params, NULL);
+  flashcache = HYBRID_init(flashcache_cc_params, argv[4]);
 
   int64_t n_req = 0, n_dram_hit = 0, n_flash_hit = 0, n_m = 0, n_m_dram_hit = 0,
           n_m_flash_hit = 0;
